@@ -807,7 +807,7 @@ $currentDateTime = date('Y-m-d\TH:i');
                                     echo "<td>$dateTime</td>";
                                     echo "<td class='action-buttons'>";
                                     echo "<button onclick=\"openUpdateForm('$recordId', '$quantity', '$rate', '$dateTime')\" class='btn btn-outline'><i class='fas fa-edit'></i> Edit</button>";
-                                    echo "<button onclick=\"openPrintModal('$farmerId', '$farmerName')\" class='btn btn-outline' style='background-color: #17a2b8; color: white;'><i class='fas fa-print'></i> Print</button>";
+                                    echo "<button onclick=\"printSingleRecord('$recordId')\" class='btn btn-outline' style='background-color: #17a2b8; color: white;'><i class='fas fa-print'></i> Print</button>";
                                     echo "</td>";
                                     echo "</tr>";
                                 }
@@ -896,42 +896,6 @@ $currentDateTime = date('Y-m-d\TH:i');
         </div>
     </div>
 
-    <div class="modal" id="printRecordModal">
-        <div class="modal-content">
-            <span class="close-btn" onclick="closePrintModal()">&times;</span>
-            <h3><i class="fas fa-print"></i> Print Farmer Records</h3>
-            <form onsubmit="event.preventDefault(); submitPrintForm();">
-                <input type="hidden" id="printFarmerId" name="printFarmerId">
-                <div class="form-group">
-                    <label for="printFarmerName" class="form-label">Farmer Name</label>
-                    <input type="text" id="printFarmerName" name="printFarmerName" class="form-control" readonly>
-                </div>
-                <div class="form-group">
-                    <label for="printStartDate" class="form-label">From Date</label>
-                    <input type="date" id="printStartDate" name="printStartDate" class="form-control" 
-                           value="<?php echo htmlspecialchars($firstDayOfMonth); ?>" required>
-                </div>
-                <div class="form-group">
-                    <label for="printEndDate" class="form-label">To Date</label>
-                    <input type="date" id="printEndDate" name="printEndDate" class="form-control" 
-                           value="<?php echo htmlspecialchars($currentDate); ?>" 
-                           max="<?php echo htmlspecialchars($currentDate); ?>" required>
-                </div>
-                <div style="margin-top: 20px; padding: 15px; background-color: #e8f4fd; border-radius: 6px; border-left: 4px solid #17a2b8;">
-                    <h4 style="margin: 0 0 10px 0; color: #17a2b8;"><i class="fas fa-info-circle"></i> Print Information</h4>
-                    <p style="margin: 0; font-size: 0.9rem; color: #495057;">
-                        This will generate a professional receipt-style report for the selected farmer 
-                        with all milk collection records within the specified date range. The report 
-                        will include farmer details, individual records, totals, and signature spaces.
-                    </p>
-                </div>
-                <button type="submit" class="btn btn-primary" style="background-color: #17a2b8; margin-top: 20px;">
-                    <i class="fas fa-print"></i> Generate & Print Report
-                </button>
-            </form>
-        </div>
-    </div>
-
     <script>
         let originalData = <?php echo json_encode($allRecords); ?>;
         let filteredData = originalData.slice();
@@ -976,7 +940,7 @@ $currentDateTime = date('Y-m-d\TH:i');
                             <button onclick="openUpdateForm('${recordId}', '${quantity}', '${rate}', '${dateTime}')" class="btn btn-outline">
                                 <i class="fas fa-edit"></i> Edit
                             </button>
-                            <button onclick="openPrintModal('${farmerId}', '${farmerName}')" class="btn btn-outline" style="background-color: #17a2b8; color: white;">
+                            <button onclick="printSingleRecord('${recordId}')" class="btn btn-outline" style="background-color: #17a2b8; color: white;">
                                 <i class="fas fa-print"></i> Print
                             </button>
                         </td>
@@ -1108,29 +1072,6 @@ $currentDateTime = date('Y-m-d\TH:i');
             document.body.removeChild(exportForm);
         }
 
-        function openPrintModal(farmerId, farmerName) {
-            document.getElementById('printFarmerId').value = farmerId;
-            document.getElementById('printFarmerName').value = farmerName;
-            document.getElementById('printRecordModal').style.display = 'flex';
-        }
-
-        function closePrintModal() {
-            document.getElementById('printRecordModal').style.display = 'none';
-        }
-
-        function submitPrintForm() {
-            const farmerId = document.getElementById('printFarmerId').value;
-            const startDate = document.getElementById('printStartDate').value;
-            const endDate = document.getElementById('printEndDate').value;
-
-            // Open print page in new window with GET parameters
-            const printUrl = `print_farmer_records.php?farmerId=${encodeURIComponent(farmerId)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
-            window.open(printUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
-            
-            // Close the modal
-            closePrintModal();
-        }
-
         function printFilteredRecords() {
             const filterName = document.getElementById('filterName').value;
             const startDate = document.getElementById('startDate').value;
@@ -1138,6 +1079,11 @@ $currentDateTime = date('Y-m-d\TH:i');
 
             const printUrl = `print_filtered_records.php?filterName=${encodeURIComponent(filterName)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
             window.open(printUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+        }
+
+        function printSingleRecord(recordId) {
+            const printUrl = `print_single_record_simple.php?recordId=${encodeURIComponent(recordId)}`;
+            window.open(printUrl, '_blank', 'width=600,height=400,scrollbars=yes,resizable=yes');
         }
 
         document.addEventListener('DOMContentLoaded', function() {
