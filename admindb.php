@@ -63,6 +63,7 @@ $conn->close();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ADMIN DASHBOARD</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css"
@@ -89,87 +90,100 @@ $conn->close();
 
         /* Style for the sidebar */
         .sidebar {
-            position: fixed;
+            background-color: #2c3e50;
+            color: white;
             width: 250px;
+            position: fixed;
             height: 100%;
-            background-color: rgba(255, 255, 255, 0.8);
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-            transition: 0.5s;
+            transition: all 0.3s;
+            z-index: 1000;
         }
 
-        /* Style for the header in the sidebar */
-        .sidebar header {
-            font-size: 22px;
+        .sidebar-header {
+            padding: 20px;
+            background-color: #1a252f;
             text-align: center;
-            padding: 20px 0;
-            color: #333;
         }
 
-        /* Style for the navigation links in the sidebar */
         .sidebar ul {
+            list-style: none;
             padding: 0;
             margin: 0;
-            list-style: none;
         }
 
         .sidebar ul li {
-            padding: 15px;
-            text-align: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+        }
+
+        .sidebar ul li:hover {
+            background-color: rgba(255, 255, 255, 0.1);
         }
 
         .sidebar ul li a {
+            color: white;
             text-decoration: none;
-            color: #333;
-            font-size: 18px;
-            display: block;
-            transition: 0.3s;
+            display: flex;
+            align-items: center;
         }
 
-        /* Change link color on hover */
-        .sidebar ul li a:hover {
-            color: #555;
+        .sidebar ul li a i {
+            margin-right: 10px;
         }
 
-        /* Add a media query for responsiveness */
-        @media screen and (max-width: 768px) {
-            .sidebar {
-                width: 35%;
-            }
-
-            .sidebar header,
-            .sidebar ul li {
-                text-align: left; /* Adjust text alignment for smaller screens */
-            }
-
-            .sidebar ul li a {
-                padding: 15px;
-                text-align: left;
-            }
+        .main-content {
+            margin-left: 250px;
+            transition: all 0.3s;
         }
 
-        /* Style for the toggle button */
         #check {
             display: none;
         }
 
-        /* Style for the hamburger and close icons */
-        #btn,
-        #cancel {
-            font-size: 30px;
+        #btn, #cancel {
+            position: fixed;
             cursor: pointer;
+            background: #2c3e50;
+            border-radius: 3px;
+            z-index: 1001;
+            color: white;
+            padding: 6px 10px;
+            font-size: 18px;
+            transition: all 0.3s;
+            display: none;
         }
 
-        /* Position the icons inside the label */
-        label i {
-            position: absolute;
+        #btn {
             top: 20px;
             left: 20px;
         }
 
-        /* Display the close icon initially as hidden */
         #cancel {
-            display: none;
-            color: red;
+            top: 20px;
+            left: 200px;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                left: -250px;
+            }
+            
+            #check:checked ~ .sidebar {
+                left: 0;
+            }
+            
+            #check:checked ~ .main-content {
+                margin-left: 250px;
+            }
+            
+            #btn, #cancel {
+                display: block;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
         }
 
         /* Additional styles for welcome message */
@@ -190,24 +204,26 @@ $conn->close();
         <i class="fas fa-times" id="cancel"></i>
     </label>
     <div class="sidebar">
-        <header>ADMIN DASHBOARD</header>
+        <div class="sidebar-header">ADMIN DASHBOARD</div>
         <ul>
-            <li><a href="add_admin.php"><i class="fas fa-stream"></i>Admins</a></li>
-            <li><a href="add_farmer.php"><i class="fas fa-stream"></i> Farmers</a></li>
-            <li><a href="records.php"><i class="fas fa-sliders-h"></i>records</a></li>
-            <li><a href="sendNotifications.php"><i class="fas fa-sliders-h"></i>Notifications</a></li>
-            <li><a href="viewfeedbacks.php"><i class="fas fa-sliders-h"></i>feedback</a></li>
-            <li><a href="reports.php"><i class="fas fa-question-circle"></i>reports</a></li>
-            <li><a href="logout.php">Logout</a></li>
+            <li><a href="add_admin.php"><i class="fas fa-user-shield"></i> Admins</a></li>
+            <li><a href="add_farmer.php"><i class="fas fa-users"></i> Farmers</a></li>
+            <li><a href="records.php"><i class="fas fa-clipboard-list"></i> Records</a></li>
+            <li><a href="sendNotifications.php"><i class="fas fa-bell"></i> Notifications</a></li>
+            <li><a href="viewfeedbacks.php"><i class="fas fa-comment-alt"></i> Feedback</a></li>
+            <li><a href="reports.php"><i class="fas fa-chart-bar"></i> Reports</a></li>
+            <li><a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
         </ul>
     </div>
 
-    <div class="welcome-message">
-        Welcome, <?php echo $adminName; ?>! <!-- Display the admin's name -->
+    <div class="main-content">
+        <div class="welcome-message">
+            Welcome, <?php echo $adminName; ?>! <!-- Display the admin's name -->
+        </div>
+
     </div>
 
     <!-- Rest of your HTML content -->
-
 </body>
 
 </html>

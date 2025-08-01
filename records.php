@@ -3,52 +3,41 @@ include 'deleteUpdateRecords.php';
 checkAdminAuthentication();
 include 'db_connection.php';
 
-// Get current date and first day of current month
 $currentDate = date('Y-m-d');
 $firstDayOfMonth = date('Y-m-01');
 
-// Set default filter dates
 $startDate = isset($_POST['startDate']) ? $_POST['startDate'] : $firstDayOfMonth;
 $endDate = isset($_POST['endDate']) ? $_POST['endDate'] : $currentDate;
 
-// Fetch all records for initial display with default month filter
-$allRecordsQuery = "SELECT record_Id, farmer_Id, farmer_name, breedOfCow, quantity, rate, date_time FROM records 
-                   WHERE DATE(date_time) BETWEEN '$startDate' AND '$endDate'";
-$allRecordsResult = $conn->query($allRecordsQuery);
+$allRecordsQuery = "SELECT record_Id, farmer_Id, farmer_name, breedOfCow, quantity, rate, date_time FROM records WHERE DATE(date_time) BETWEEN ? AND ?";
+$stmt = $conn->prepare($allRecordsQuery);
+$stmt->bind_param("ss", $startDate, $endDate);
+$stmt->execute();
+$allRecordsResult = $stmt->get_result();
 
-// Check if the query was successful
-if ($allRecordsResult) {
-    $allRecords = $allRecordsResult->fetch_all(MYSQLI_ASSOC);
-} else {
-    echo "<div class='error-message'>Error in fetching all records: " . $conn->error . "</div>";
-    $allRecords = array();
+$allRecords = $allRecordsResult ? $allRecordsResult->fetch_all(MYSQLI_ASSOC) : [];
+if (!$allRecordsResult) {
+    $errorMessage = "Error fetching records: " . $conn->error;
 }
 
-// Fetch farmer names and IDs from the database
 $query = "SELECT id, name, breedOfCow FROM farmers";
-$result = $conn->query($query);
-
-// Check if the query was successful
-if ($result) {
-    $farmerData = $result->fetch_all(MYSQLI_ASSOC);
-} else {
-    echo "<div class='error-message'>Error in fetching farmer data: " . $conn->error . "</div>";
-    $farmerData = array();
+$farmerResult = $conn->query($query);
+$farmerData = $farmerResult ? $farmerResult->fetch_all(MYSQLI_ASSOC) : [];
+if (!$farmerResult) {
+    $errorMessage = "Error fetching farmer data: " . $conn->error;
 }
 
 $rateQuery = "SELECT value FROM rates WHERE name = 'rate'";
 $rateResult = $conn->query($rateQuery);
-
-if ($rateResult) {
-    $rateRow = $rateResult->fetch_assoc();
-    $rate = $rateRow['value'];
-} else {
-    echo "<div class='error-message'>Error fetching rate: " . $conn->error . "</div>";
+$rate = $rateResult && $rateResult->num_rows > 0 ? $rateResult->fetch_assoc()['value'] : 0;
+if (!$rateResult) {
+    $errorMessage = "Error fetching rate: " . $conn->error;
 }
 
-// Check if the form is submitted
+$successMessage = "";
+$errorMessage = isset($errorMessage) ? $errorMessage : "";
+
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['farmerId'])) {
-    // Retrieve form data
     $farmerId = $_POST['farmerId'];
     $farmerName = $_POST['farmerName'];
     $breedOfCow = $_POST['breedOfCow'];
@@ -56,87 +45,82 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['farmerId'])) {
     $dateTime = $_POST['dateTime'];
     $rate = $_POST['rate'];
 
-    // Prepare and execute the SQL query to insert data
-    $query = "INSERT INTO records (farmer_Id, farmer_name, breedOfCow, quantity, date_time, rate) VALUES (?, ?, ?, ?, ?, ?)";
-    $stmt = $conn->prepare($query);
-
-    if (!$stmt) {
-        die("<div class='error-message'>Error: " . $conn->error . "</div>");
-    }
-
-    $stmt->bind_param("sssssd", $farmerId, $farmerName, $breedOfCow, $quantity, $dateTime, $rate);
-
-    if ($stmt->execute()) {
-        echo "<div class='success-message'>Record added successfully.</div>";
+    $stmt = $conn->prepare("INSERT INTO records (farmer_Id, farmer_name, breedOfCow, quantity, date_time, rate) VALUES (?, ?, ?, ?, ?, ?)");
+    if ($stmt) {
+        $stmt->bind_param("sssssd", $farmerId, $farmerName, $breedOfCow, $quantity, $dateTime, $rate);
+        if ($stmt->execute()) {
+            $successMessage = "Record added successfully.";
+            header("Location: records.php");
+            exit();
+        } else {
+            $errorMessage = "Error adding record: " . $stmt->error;
+        }
+        $stmt->close();
     } else {
-        echo "<div class='error-message'>Error: " . $stmt->error . "</div>";
+        $errorMessage = "Error preparing statement: " . $conn->error;
     }
-
-    $stmt->close();
 }
 
-// Build the SQL query for fetching records with filtering
-$filterQuery = "SELECT record_Id, farmer_Id, farmer_name, breedOfCow, quantity, date_time, rate FROM records WHERE 1";
+$filterQuery = "SELECT record_Id, farmer_Id, farmer_name, breedOfCow, quantity, rate, date_time FROM records WHERE 1";
+$params = [];
+$types = "";
 
 if (isset($_POST['filterName']) && !empty($_POST['filterName'])) {
-    $filterName = $_POST['filterName'];
-    $filterQuery .= " AND farmer_Id LIKE '%$filterName%'";
+    $filterName = "%" . $_POST['filterName'] . "%";
+    $filterQuery .= " AND farmer_Id LIKE ?";
+    $params[] = $filterName;
+    $types .= "s";
 }
 
 if (isset($_POST['startDate']) && !empty($_POST['startDate'])) {
-    $startDate = $_POST['startDate'];
-    $filterQuery .= " AND DATE(date_time) >= '$startDate'";
+    $filterQuery .= " AND DATE(date_time) >= ?";
+    $params[] = $startDate;
+    $types .= "s";
 }
 
 if (isset($_POST['endDate']) && !empty($_POST['endDate'])) {
-    $endDate = $_POST['endDate'];
-    $filterQuery .= " AND DATE(date_time) <= '$endDate'";
+    $filterQuery .= " AND DATE(date_time) <= ?";
+    $params[] = $endDate;
+    $types .= "s";
 }
 
-$result = $conn->query($filterQuery);
-
-// Check if the query was successful
-if ($result) {
-    $numRows = $result->num_rows;
-} else {
-    echo "<div class='error-message'>Error in fetching records: " . $conn->error . "</div>";
-    $numRows = 0;
+$stmt = $conn->prepare($filterQuery);
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$result = $stmt->get_result();
+$numRows = $result ? $result->num_rows : 0;
+if (!$result) {
+    $errorMessage = "Error fetching records: " . $conn->error;
 }
 
-// Initialize total income variable
 $totalIncome = 0;
-
-// Check if there are rows before entering the loop
 if ($numRows > 0) {
-    // Calculate total income for filtered records
     while ($row = $result->fetch_assoc()) {
-        $quantity = $row['quantity'];
-        $income = $quantity * $rate;
-        $totalIncome += $income;
+        $totalIncome += $row['quantity'] * $row['rate'];
     }
+    $result->data_seek(0);
 }
 
-// Display specific total income for an individual farmer
 if (isset($_POST['specificFarmerId']) && !empty($_POST['specificFarmerId'])) {
     $specificFarmerId = $_POST['specificFarmerId'];
-    $specificTotalIncomeQuery = "SELECT SUM(quantity * $rate) as totalIncome FROM records WHERE farmer_Id = '$specificFarmerId'";
-    $specificTotalIncomeResult = $conn->query($specificTotalIncomeQuery);
-
+    $stmt = $conn->prepare("SELECT SUM(quantity * rate) as totalIncome FROM records WHERE farmer_Id = ?");
+    $stmt->bind_param("s", $specificFarmerId);
+    $stmt->execute();
+    $specificTotalIncomeResult = $stmt->get_result();
     if ($specificTotalIncomeResult) {
-        $specificTotalIncomeRow = $specificTotalIncomeResult->fetch_assoc();
-        $specificTotalIncome = $specificTotalIncomeRow['totalIncome'];
-        echo "<div class='info-message'>Total Income for Farmer ID $specificFarmerId: $specificTotalIncome</div>";
+        $specificTotalIncome = $specificTotalIncomeResult->fetch_assoc()['totalIncome'];
+        $infoMessage = "Total Income for Farmer ID $specificFarmerId: Ksh " . number_format($specificTotalIncome, 2);
     } else {
-        echo "<div class='error-message'>Error in fetching specific total income: " . $conn->error . "</div>";
+        $errorMessage = "Error fetching specific total income: " . $conn->error;
     }
 }
 
-// Close the database connection
 $conn->close();
-
-// Get current date/time in format for datetime-local input
 $currentDateTime = date('Y-m-d\TH:i');
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -217,7 +201,7 @@ $currentDateTime = date('Y-m-d\TH:i');
         th {
             background-color: var(--primary-color);
             color: var(--white);
-            font-weight: 500;
+            font-weight: 600;
             text-transform: uppercase;
             font-size: 0.85rem;
             letter-spacing: 0.5px;
@@ -242,6 +226,7 @@ $currentDateTime = date('Y-m-d\TH:i');
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            font-weight: 600;
         }
 
         .btn-primary {
@@ -281,9 +266,9 @@ $currentDateTime = date('Y-m-d\TH:i');
             align-items: center;
             justify-content: center;
             font-size: 24px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            box-shadow: var(--shadow);
             cursor: pointer;
-            z-index: 10;
+            z-index: 1000;
             transition: all 0.3s ease;
         }
 
@@ -299,18 +284,37 @@ $currentDateTime = date('Y-m-d\TH:i');
             flex-wrap: wrap;
         }
 
-        .filter-input {
-            padding: 10px 15px;
-            border: 1px solid var(--medium-gray);
-            border-radius: 4px;
-            font-size: 0.9rem;
+        .form-group {
             flex: 1;
             min-width: 200px;
         }
 
-        .filter-input:focus {
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--dark-gray);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid var(--medium-gray);
+            border-radius: 4px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
             outline: none;
             border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+
+        select.form-control {
+            appearance: none;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"><path fill="%234CAF50" d="M7 10l5 5 5-5z"/></svg>') no-repeat right 10px center;
+            background-size: 12px;
         }
 
         .modal {
@@ -321,7 +325,7 @@ $currentDateTime = date('Y-m-d\TH:i');
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
-            z-index: 100;
+            z-index: 1000;
             justify-content: center;
             align-items: center;
         }
@@ -345,87 +349,52 @@ $currentDateTime = date('Y-m-d\TH:i');
             color: var(--dark-gray);
         }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 10px 15px;
-            border: 1px solid var(--medium-gray);
-            border-radius: 4px;
-            font-size: 0.9rem;
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-
         .total-row {
             font-weight: 600;
             background-color: rgba(76, 175, 80, 0.1);
         }
 
         .success-message {
-            background-color: #d4edda;
-            color: #155724;
-            padding: 10px 15px;
+            background-color: rgba(76, 175, 80, 0.1);
+            color: var(--primary-dark);
+            padding: 12px 15px;
             border-radius: 4px;
             margin-bottom: 20px;
-            border-left: 4px solid #28a745;
+            border-left: 4px solid var(--primary-color);
+            display: flex;
+            align-items: center;
         }
 
         .error-message {
-            background-color: #f8d7da;
+            background-color: rgba(255, 0, 0, 0.1);
             color: #721c24;
-            padding: 10px 15px;
+            padding: 12px 15px;
             border-radius: 4px;
             margin-bottom: 20px;
             border-left: 4px solid #dc3545;
+            display: flex;
+            align-items: center;
         }
 
         .info-message {
-            background-color: #d1ecf1;
+            background-color: rgba(23, 162, 184, 0.1);
             color: #0c5460;
-            padding: 10px 15px;
+            padding: 12px 15px;
             border-radius: 4px;
             margin-bottom: 20px;
             border-left: 4px solid #17a2b8;
+            display: flex;
+            align-items: center;
         }
 
-        @media screen and (max-width: 768px) {
-            .filter-container {
-                flex-direction: column;
-                gap: 10px;
-            }
-            
-            th, td {
-                padding: 8px 10px;
-                font-size: 0.85rem;
-            }
-            
-            .action-buttons {
-                flex-direction: column;
-                gap: 5px;
-            }
-            
-            .btn {
-                width: 100%;
-                padding: 6px 10px;
-            }
+        .success-message i, .error-message i, .info-message i {
+            margin-right: 10px;
         }
 
         /* Sidebar styles */
         .sidebar {
             background-color: #2c3e50;
-            color: white;
+            color: var(--white);
             width: 250px;
             position: fixed;
             height: 100%;
@@ -437,6 +406,7 @@ $currentDateTime = date('Y-m-d\TH:i');
             padding: 20px;
             background-color: #1a252f;
             text-align: center;
+            font-weight: 600;
         }
 
         .sidebar ul {
@@ -456,7 +426,7 @@ $currentDateTime = date('Y-m-d\TH:i');
         }
 
         .sidebar ul li a {
-            color: white;
+            color: var(--white);
             text-decoration: none;
             display: flex;
             align-items: center;
@@ -481,7 +451,7 @@ $currentDateTime = date('Y-m-d\TH:i');
             background: #2c3e50;
             border-radius: 3px;
             z-index: 1001;
-            color: white;
+            color: var(--white);
             padding: 6px 10px;
             font-size: 18px;
             transition: all 0.3s;
@@ -518,9 +488,40 @@ $currentDateTime = date('Y-m-d\TH:i');
             .main-content {
                 margin-left: 0;
             }
+
+            .filter-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .form-group {
+                min-width: 100%;
+            }
+
+            th, td {
+                padding: 8px 10px;
+                font-size: 0.85rem;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            .btn {
+                width: 100%;
+                padding: 6px 10px;
+            }
+
+            .add-record-btn {
+                bottom: 20px;
+                right: 20px;
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
         }
     </style>
-    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <input type="checkbox" id="check">
@@ -546,32 +547,48 @@ $currentDateTime = date('Y-m-d\TH:i');
         <div class="container">
             <h2><i class="fas fa-clipboard-list"></i> Milk Collection Records</h2>
             
+            <?php if (!empty($successMessage)): ?>
+                <div class="success-message">
+                    <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($successMessage); ?>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($errorMessage)): ?>
+                <div class="error-message">
+                    <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($errorMessage); ?>
+                </div>
+            <?php endif; ?>
+            <?php if (!empty($infoMessage)): ?>
+                <div class="info-message">
+                    <i class="fas fa-info-circle"></i> <?php echo htmlspecialchars($infoMessage); ?>
+                </div>
+            <?php endif; ?>
+            
             <div class="card">
                 <form method="post" id="filterForm">
                     <div class="filter-container">
-                        <input type="text" class="filter-input" id="filterName" name="filterName" placeholder="Filter by Farmer ID..." 
-                               value="<?php echo isset($_POST['filterName']) ? htmlspecialchars($_POST['filterName']) : ''; ?>">
-                        
-                        <div class="form-group" style="flex: 1; min-width: 200px;">
+                        <div class="form-group">
+                            <label for="filterName" class="form-label">Filter by Farmer ID</label>
+                            <input type="text" class="form-control" id="filterName" name="filterName" placeholder="Enter Farmer ID..." 
+                                   value="<?php echo isset($_POST['filterName']) ? htmlspecialchars($_POST['filterName']) : ''; ?>">
+                        </div>
+                        <div class="form-group">
                             <label for="startDate" class="form-label">From Date</label>
-                            <input type="date" class="filter-input" id="startDate" name="startDate" 
-                                   value="<?php echo $startDate; ?>">
+                            <input type="date" class="form-control" id="startDate" name="startDate" 
+                                   value="<?php echo htmlspecialchars($startDate); ?>">
                         </div>
-                        
-                        <div class="form-group" style="flex: 1; min-width: 200px;">
+                        <div class="form-group">
                             <label for="endDate" class="form-label">To Date</label>
-                            <input type="date" class="filter-input" id="endDate" name="endDate" 
-                                   value="<?php echo $endDate; ?>" max="<?php echo $currentDate; ?>">
+                            <input type="date" class="form-control" id="endDate" name="endDate" 
+                                   value="<?php echo htmlspecialchars($endDate); ?>" max="<?php echo htmlspecialchars($currentDate); ?>">
                         </div>
-                        
-                        <button type="submit" class="btn btn-primary" style="align-self: flex-end;">
-                            <i class="fas fa-filter"></i> Apply Filters
-                        </button>
-                        
-                        <button type="button" class="btn btn-outline" style="align-self: flex-end;" 
-                                onclick="resetFilters()">
-                            <i class="fas fa-sync-alt"></i> Reset
-                        </button>
+                        <div class="form-group" style="align-self: flex-end;">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-filter"></i> Apply Filters
+                            </button>
+                            <button type="button" class="btn btn-outline" onclick="resetFilters()">
+                                <i class="fas fa-sync-alt"></i> Reset
+                            </button>
+                        </div>
                     </div>
                 </form>
                 
@@ -593,16 +610,15 @@ $currentDateTime = date('Y-m-d\TH:i');
                         <tbody>
                             <?php
                             if ($numRows > 0) {
-                                $result->data_seek(0);
                                 while ($row = $result->fetch_assoc()) {
-                                    $recordId = $row['record_Id'];
-                                    $farmerId = $row['farmer_Id'];
-                                    $farmerName = $row['farmer_name'];
-                                    $breedOfCow = $row['breedOfCow'];
-                                    $quantity = $row['quantity'];
-                                    $rate = $row['rate'];
-                                    $income = $quantity * $rate;
-                                    $dateTime = $row['date_time'];
+                                    $recordId = htmlspecialchars($row['record_Id']);
+                                    $farmerId = htmlspecialchars($row['farmer_Id']);
+                                    $farmerName = htmlspecialchars($row['farmer_name']);
+                                    $breedOfCow = htmlspecialchars($row['breedOfCow']);
+                                    $quantity = htmlspecialchars($row['quantity']);
+                                    $rate = htmlspecialchars($row['rate']);
+                                    $income = number_format($quantity * $rate, 2);
+                                    $dateTime = htmlspecialchars($row['date_time']);
                                     
                                     echo "<tr>";
                                     echo "<td>$recordId</td>";
@@ -618,10 +634,9 @@ $currentDateTime = date('Y-m-d\TH:i');
                                     echo "</td>";
                                     echo "</tr>";
                                 }
-                                
                                 echo "<tr class='total-row'>";
                                 echo "<td colspan='5' style='text-align: right;'><strong>Total Income:</strong></td>";
-                                echo "<td colspan='4'>Ksh $totalIncome</td>";
+                                echo "<td colspan='4'>Ksh " . number_format($totalIncome, 2) . "</td>";
                                 echo "</tr>";
                             } else {
                                 echo "<tr><td colspan='9' style='text-align: center;'>No records found</td></tr>";
@@ -634,76 +649,70 @@ $currentDateTime = date('Y-m-d\TH:i');
         </div>
     </div>
 
-    <!-- Add Record Button -->
     <div class="add-record-btn" onclick="openAddRecordForm()">
         <i class="fas fa-plus"></i>
     </div>
 
-    <!-- Add Record Modal -->
     <div class="modal" id="addRecordModal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeAddRecordForm()">&times;</span>
             <h3><i class="fas fa-plus-circle"></i> Add New Record</h3>
             <form method="post" action="records.php">
                 <div class="form-group">
-                    <label for="farmerId" class="form-label">Farmer ID</label>
-                    <input type="text" id="farmerId" name="farmerId" class="form-control" oninput="autocompleteFarmerName()" required>
+                    <label for="farmerId" class="form-label">Farmer</label>
+                    <select id="farmerId" name="farmerId" class="form-control" onchange="autocompleteFarmerName()" required>
+                        <option value="">Select a Farmer</option>
+                        <?php
+                        foreach ($farmerData as $farmer) {
+                            echo '<option value="' . htmlspecialchars($farmer['id']) . '">' . htmlspecialchars($farmer['name']) . ' (ID: ' . htmlspecialchars($farmer['id']) . ')</option>';
+                        }
+                        ?>
+                    </select>
                 </div>
-                
                 <div class="form-group">
                     <label for="farmerName" class="form-label">Farmer Name</label>
                     <input type="text" id="farmerName" name="farmerName" class="form-control" readonly>
                 </div>
-                
                 <div class="form-group">
                     <label for="breedOfCow" class="form-label">Breed of Cow</label>
                     <input type="text" id="breedOfCow" name="breedOfCow" class="form-control" readonly>
                 </div>
-                
                 <div class="form-group">
                     <label for="quantity" class="form-label">Quantity (kg)</label>
                     <input type="number" step="0.01" id="quantity" name="quantity" class="form-control" required>
                 </div>
-                
                 <div class="form-group">
                     <label for="rate" class="form-label">Rate (Ksh)</label>
-                    <input type="number" step="0.01" id="rate" name="rate" class="form-control" value="<?php echo $rate; ?>" required>
+                    <input type="number" step="0.01" id="rate" name="rate" class="form-control" value="<?php echo htmlspecialchars($rate); ?>" required>
                 </div>
-                
                 <div class="form-group">
                     <label for="dateTime" class="form-label">Date/Time</label>
                     <input type="datetime-local" id="dateTime" name="dateTime" class="form-control" 
-                           value="<?php echo $currentDateTime; ?>" required>
+                           value="<?php echo htmlspecialchars($currentDateTime); ?>" required>
                 </div>
-                
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Record</button>
             </form>
         </div>
     </div>
-    
-    <!-- Update Record Modal -->
+
     <div class="modal" id="updateRecordModal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeUpdateForm()">&times;</span>
             <h3><i class="fas fa-edit"></i> Update Record</h3>
             <form onsubmit="event.preventDefault(); submitUpdateForm();">
                 <input type="hidden" id="updateRecordId" name="updateRecordId">
-                
                 <div class="form-group">
                     <label for="updateQuantity" class="form-label">Quantity (kg)</label>
                     <input type="number" step="0.01" id="updateQuantity" name="updateQuantity" class="form-control" required>
                 </div>
-                
                 <div class="form-group">
                     <label for="updateRate" class="form-label">Rate (Ksh)</label>
                     <input type="number" step="0.01" id="updateRate" name="updateRate" class="form-control" required>
                 </div>
-                
                 <div class="form-group">
                     <label for="updateDateTime" class="form-label">Date/Time</label>
                     <input type="datetime-local" id="updateDateTime" name="updateDateTime" class="form-control" required>
                 </div>
-                
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Record</button>
             </form>
             <div id="updateMessage" class="mt-3"></div>
@@ -716,29 +725,18 @@ $currentDateTime = date('Y-m-d\TH:i');
 
         function filterTable() {
             const filterName = document.getElementById('filterName').value.toLowerCase();
-            const filterDate = document.getElementById('filterDate').value;
-
             filteredData = originalData.filter(row => {
                 const farmerId = row.farmer_Id.toLowerCase();
-                const dateTime = row.date_time.split(' ')[0].toLowerCase();
-
-                const idMatch = farmerId.includes(filterName);
-                const dateMatch = filterDate === '' || dateTime === filterDate;
-
-                return idMatch && dateMatch;
+                return farmerId.includes(filterName);
             });
-
             updateTable();
         }
 
         function updateTable() {
             const recordsTable = document.querySelector('#recordsTable tbody');
             let totalIncome = 0;
-
-            // Clear the table body
             recordsTable.innerHTML = '';
 
-            // Display filtered records
             if (filteredData.length > 0) {
                 filteredData.forEach(row => {
                     const recordId = row.record_Id;
@@ -747,10 +745,9 @@ $currentDateTime = date('Y-m-d\TH:i');
                     const cowBreed = row.breedOfCow;
                     const quantity = row.quantity;
                     const rate = row.rate;
-                    const income = quantity * rate;
+                    const income = (quantity * rate).toFixed(2);
                     const dateTime = row.date_time;
-                    
-                    totalIncome += income;
+                    totalIncome += parseFloat(income);
 
                     const rowElement = document.createElement('tr');
                     rowElement.innerHTML = `
@@ -771,7 +768,6 @@ $currentDateTime = date('Y-m-d\TH:i');
                     recordsTable.appendChild(rowElement);
                 });
 
-                // Add total row
                 const totalRow = document.createElement('tr');
                 totalRow.className = 'total-row';
                 totalRow.innerHTML = `
@@ -787,21 +783,12 @@ $currentDateTime = date('Y-m-d\TH:i');
         }
 
         function resetFilters() {
-            // Reset to current month (1st to today)
-            const firstDay = new Date();
-            firstDay.setDate(1);
-            const firstDayStr = firstDay.toISOString().split('T')[0];
-            
-            const today = new Date().toISOString().split('T')[0];
-            
             document.getElementById('filterName').value = '';
-            document.getElementById('startDate').value = firstDayStr;
-            document.getElementById('endDate').value = today;
-            
-            // Submit the form to apply changes
+            document.getElementById('startDate').value = '<?php echo htmlspecialchars($firstDayOfMonth); ?>';
+            document.getElementById('endDate').value = '<?php echo htmlspecialchars($currentDate); ?>';
             document.getElementById('filterForm').submit();
         }
-        
+
         function openAddRecordForm() {
             document.getElementById('addRecordModal').style.display = 'flex';
         }
@@ -814,7 +801,7 @@ $currentDateTime = date('Y-m-d\TH:i');
             document.getElementById('updateRecordId').value = recordId;
             document.getElementById('updateQuantity').value = quantity;
             document.getElementById('updateRate').value = rate;
-            document.getElementById('updateDateTime').value = dateTime;
+            document.getElementById('updateDateTime').value = dateTime.replace(' ', 'T');
             document.getElementById('updateMessage').innerHTML = '';
             document.getElementById('updateRecordModal').style.display = 'flex';
         }
@@ -838,9 +825,7 @@ $currentDateTime = date('Y-m-d\TH:i');
                                 <i class="fas fa-check-circle"></i> ${xhr.responseText}
                             </div>
                         `;
-                        setTimeout(() => {
-                            location.reload();
-                        }, 1500);
+                        setTimeout(() => location.reload(), 1500);
                     } else {
                         document.getElementById('updateMessage').innerHTML = `
                             <div class="error-message">
@@ -863,12 +848,11 @@ $currentDateTime = date('Y-m-d\TH:i');
         }
 
         function autocompleteFarmerName() {
-            const farmerIdInput = document.getElementById('farmerId');
+            const farmerIdSelect = document.getElementById('farmerId');
             const farmerNameInput = document.getElementById('farmerName');
             const breedOfCowInput = document.getElementById('breedOfCow');
-
-            const farmerId = farmerIdInput.value.trim();
-            const matchingFarmer = <?php echo json_encode($farmerData); ?>.find(farmer => farmer.id.includes(farmerId));
+            const farmerId = farmerIdSelect.value;
+            const matchingFarmer = <?php echo json_encode($farmerData); ?>.find(farmer => farmer.id === farmerId);
 
             if (matchingFarmer) {
                 farmerNameInput.value = matchingFarmer.name;
@@ -879,12 +863,8 @@ $currentDateTime = date('Y-m-d\TH:i');
             }
         }
 
-        // Set max date for end date picker to today
         document.addEventListener('DOMContentLoaded', function() {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('endDate').max = today;
-            
-            // Initialize the table
+            document.getElementById('endDate').max = '<?php echo htmlspecialchars($currentDate); ?>';
             filterTable();
         });
     </script>
