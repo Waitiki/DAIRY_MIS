@@ -1,18 +1,26 @@
 <?php
-
 include 'deleteUpdateRecords.php';
 checkAdminAuthentication();
 include 'db_connection.php';
 
-// Fetch all records for initial display
-$allRecordsQuery = "SELECT record_Id, farmer_Id, farmer_name, breedOfCow, quantity, rate, date_time FROM records";
+// Get current date and first day of current month
+$currentDate = date('Y-m-d');
+$firstDayOfMonth = date('Y-m-01');
+
+// Set default filter dates
+$startDate = isset($_POST['startDate']) ? $_POST['startDate'] : $firstDayOfMonth;
+$endDate = isset($_POST['endDate']) ? $_POST['endDate'] : $currentDate;
+
+// Fetch all records for initial display with default month filter
+$allRecordsQuery = "SELECT record_Id, farmer_Id, farmer_name, breedOfCow, quantity, rate, date_time FROM records 
+                   WHERE DATE(date_time) BETWEEN '$startDate' AND '$endDate'";
 $allRecordsResult = $conn->query($allRecordsQuery);
 
 // Check if the query was successful
 if ($allRecordsResult) {
     $allRecords = $allRecordsResult->fetch_all(MYSQLI_ASSOC);
 } else {
-    echo "Error in fetching all records: " . $conn->error;
+    echo "<div class='error-message'>Error in fetching all records: " . $conn->error . "</div>";
     $allRecords = array();
 }
 
@@ -24,7 +32,7 @@ $result = $conn->query($query);
 if ($result) {
     $farmerData = $result->fetch_all(MYSQLI_ASSOC);
 } else {
-    echo "Error in fetching farmer data: " . $conn->error;
+    echo "<div class='error-message'>Error in fetching farmer data: " . $conn->error . "</div>";
     $farmerData = array();
 }
 
@@ -35,13 +43,11 @@ if ($rateResult) {
     $rateRow = $rateResult->fetch_assoc();
     $rate = $rateRow['value'];
 } else {
-    // Default rate if there is an issue fetching from the database
-    // $rate = 50;
-    echo "Error fetching rate: " . $conn->error;
+    echo "<div class='error-message'>Error fetching rate: " . $conn->error . "</div>";
 }
 
 // Check if the form is submitted
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['farmerId'])) {
     // Retrieve form data
     $farmerId = $_POST['farmerId'];
     $farmerName = $_POST['farmerName'];
@@ -55,27 +61,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $stmt = $conn->prepare($query);
 
     if (!$stmt) {
-        die("Error: " . $conn->error);
+        die("<div class='error-message'>Error: " . $conn->error . "</div>");
     }
 
     $stmt->bind_param("sssssd", $farmerId, $farmerName, $breedOfCow, $quantity, $dateTime, $rate);
 
     if ($stmt->execute()) {
-        echo "Record added successfully.";
+        echo "<div class='success-message'>Record added successfully.</div>";
     } else {
-        echo "Error: " . $stmt->error;
+        echo "<div class='error-message'>Error: " . $stmt->error . "</div>";
     }
 
     $stmt->close();
 }
 
-
 // Build the SQL query for fetching records with filtering
 $filterQuery = "SELECT record_Id, farmer_Id, farmer_name, breedOfCow, quantity, date_time, rate FROM records WHERE 1";
 
-if (isset($_POST['filterDate']) && !empty($_POST['filterDate'])) {
-    $filterDate = $_POST['filterDate'];
-    $filterQuery .= " AND DATE(date_time) = '$filterDate'";
+if (isset($_POST['filterName']) && !empty($_POST['filterName'])) {
+    $filterName = $_POST['filterName'];
+    $filterQuery .= " AND farmer_Id LIKE '%$filterName%'";
+}
+
+if (isset($_POST['startDate']) && !empty($_POST['startDate'])) {
+    $startDate = $_POST['startDate'];
+    $filterQuery .= " AND DATE(date_time) >= '$startDate'";
+}
+
+if (isset($_POST['endDate']) && !empty($_POST['endDate'])) {
+    $endDate = $_POST['endDate'];
+    $filterQuery .= " AND DATE(date_time) <= '$endDate'";
 }
 
 $result = $conn->query($filterQuery);
@@ -84,7 +99,7 @@ $result = $conn->query($filterQuery);
 if ($result) {
     $numRows = $result->num_rows;
 } else {
-    echo "Error in fetching records: " . $conn->error;
+    echo "<div class='error-message'>Error in fetching records: " . $conn->error . "</div>";
     $numRows = 0;
 }
 
@@ -96,8 +111,8 @@ if ($numRows > 0) {
     // Calculate total income for filtered records
     while ($row = $result->fetch_assoc()) {
         $quantity = $row['quantity'];
-        $income = $quantity * $rate; // Calculate income based on quantity
-        $totalIncome += $income; // Accumulate income for each row
+        $income = $quantity * $rate;
+        $totalIncome += $income;
     }
 }
 
@@ -110,561 +125,768 @@ if (isset($_POST['specificFarmerId']) && !empty($_POST['specificFarmerId'])) {
     if ($specificTotalIncomeResult) {
         $specificTotalIncomeRow = $specificTotalIncomeResult->fetch_assoc();
         $specificTotalIncome = $specificTotalIncomeRow['totalIncome'];
-        echo "Total Income for Farmer ID $specificFarmerId: $specificTotalIncome";
+        echo "<div class='info-message'>Total Income for Farmer ID $specificFarmerId: $specificTotalIncome</div>";
     } else {
-        echo "Error in fetching specific total income: " . $conn->error;
+        echo "<div class='error-message'>Error in fetching specific total income: " . $conn->error . "</div>";
     }
 }
 
 // Close the database connection
 $conn->close();
 
-
+// Get current date/time in format for datetime-local input
+$currentDateTime = date('Y-m-d\TH:i');
 ?>
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <title>Records Management</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Milk Records Management</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
+        :root {
+            --primary-color: #4CAF50;
+            --primary-dark: #45a049;
+            --light-gray: #f5f5f5;
+            --medium-gray: #e0e0e0;
+            --dark-gray: #333;
+            --white: #ffffff;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background-image: url('background.jpg'); /* Replace with your background image */
-            background-size: cover;
-            background-position: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light-gray);
             margin: 0;
             padding: 0;
-            color: #333;
+            color: var(--dark-gray);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
         }
 
         h2 {
             text-align: center;
-            color: #4CAF50;
+            color: var(--primary-color);
+            margin-bottom: 30px;
+            font-weight: 600;
+            position: relative;
+            padding-bottom: 10px;
         }
 
-        .table-container {
-            margin: 20px auto;
-			margin-left:200px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 5px;
-            overflow: hidden;
-            width: 80%; /* Adjust the width as needed */
+        h2::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 3px;
+            background-color: var(--primary-color);
+        }
+
+        .card {
+            background-color: var(--white);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
         }
 
         table {
-            border-collapse: collapse;
             width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
         }
 
-        th,
-        td {
+        th, td {
             padding: 12px 15px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid var(--medium-gray);
         }
 
         th {
-            background: #4CAF50;
-            color: white;
+            background-color: var(--primary-color);
+            color: var(--white);
+            font-weight: 500;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
         }
 
-        .add-record{
-			margin-left:300px;
-			margin-top:100px;
-		    font-size:40px;
-			
-		}
-        .update-record,
-        .delete-record {
-            font-size: 20px;
+        tr:hover {
+            background-color: rgba(76, 175, 80, 0.05);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
             cursor: pointer;
-            margin: 5px;
-            color: #4CAF50;
+            transition: all 0.3s ease;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .add-record:hover,
-        .update-record:hover,
-        .delete-record:hover {
-            color: #45a049;
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: var(--white);
         }
 
-        .search-bar,
-        .filter-bar {
-            margin: 20px;
-            float: right;
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-1px);
         }
 
-        .search-input,
+        .btn-outline {
+            background-color: transparent;
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .btn-outline:hover {
+            background-color: rgba(76, 175, 80, 0.1);
+        }
+
+        .btn i {
+            margin-right: 5px;
+        }
+
+        .add-record-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+
+        .add-record-btn:hover {
+            background-color: var(--primary-dark);
+            transform: scale(1.1);
+        }
+
+        .filter-container {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
         .filter-input {
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
+            padding: 10px 15px;
+            border: 1px solid var(--medium-gray);
+            border-radius: 4px;
+            font-size: 0.9rem;
+            flex: 1;
+            min-width: 200px;
         }
 
-        .add-record-form,
-        .update-record-form,
-        .delete-record-form {
+        .filter-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .modal {
             display: none;
-            background: #fff;
-            padding: 20px;
-            border-radius: 5px;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 2;
-        }
-
-        .blurred-background {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-            display: none;
-            z-index: 1;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
         }
 
-        .close-icon {
+        .modal-content {
+            background-color: var(--white);
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .close-btn {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            font-size: 24px;
+            top: 15px;
+            right: 15px;
+            font-size: 20px;
             cursor: pointer;
+            color: var(--dark-gray);
         }
 
-        .symbol {
-            font-size: 18px;
-            margin-right: 5px;
+        .form-group {
+            margin-bottom: 20px;
         }
 
-        /* Style for update and delete buttons in the table */
-        .action-buttons {
-            display: flex;
-            gap: 5px;
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
         }
 
-        .update-record-button,
-        .delete-record-button {
-            font-size: 14px;
-            padding: 8px 12px;
-            cursor: pointer;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            outline: none;
-        }
-
-        .update-record-button:hover,
-        .delete-record-button:hover {
-            background-color: #45a049;
-        }
-
-        .records-btns{
-            background-color: white;
-            color: black;
-            padding: 3px;
-            font-size: medium;
-            font-weight: 300;
-            font-family: ui-monospace;
-            border: 1px solid #ddd;
+        .form-control {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid var(--medium-gray);
             border-radius: 4px;
-            box-shadow: 0px 0px 5px red;
+            font-size: 0.9rem;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .total-row {
+            font-weight: 600;
+            background-color: rgba(76, 175, 80, 0.1);
+        }
+
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #28a745;
+        }
+
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #dc3545;
+        }
+
+        .info-message {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #17a2b8;
+        }
+
+        @media screen and (max-width: 768px) {
+            .filter-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            th, td {
+                padding: 8px 10px;
+                font-size: 0.85rem;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            .btn {
+                width: 100%;
+                padding: 6px 10px;
+            }
+        }
+
+        /* Sidebar styles */
+        .sidebar {
+            background-color: #2c3e50;
+            color: white;
+            width: 250px;
+            position: fixed;
+            height: 100%;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            background-color: #1a252f;
+            text-align: center;
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar ul li {
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+        }
+
+        .sidebar ul li:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar ul li a {
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar ul li a i {
+            margin-right: 10px;
+        }
+
+        .main-content {
+            margin-left: 250px;
+            transition: all 0.3s;
+        }
+
+        #check {
+            display: none;
+        }
+
+        #btn, #cancel {
+            position: fixed;
             cursor: pointer;
+            background: #2c3e50;
+            border-radius: 3px;
+            z-index: 1001;
+            color: white;
+            padding: 6px 10px;
+            font-size: 18px;
+            transition: all 0.3s;
+            display: none;
         }
 
-		 @media screen and (max-width: 768px) {
-    .table-container {
-        width: 100%;
-        max-width: none;
-        margin: 10px; /* Add some margin to improve spacing */
-    }
+        #btn {
+            top: 20px;
+            left: 20px;
+        }
 
-    table {
-        font-size: 14px; /* Decrease font size for better readability */
-    }
+        #cancel {
+            top: 20px;
+            left: 200px;
+        }
 
-    th, td {
-        padding: 8px 10px; /* Reduce padding for better spacing */
-    }
-
-    .search-bar,
-    .filter-bar {
-        margin: 10px; /* Adjust margin for better spacing */
-        text-align: center; /* Center the search and filter bars */
-    }
-
-    .search-input,
-    .filter-input {
-        width: 100%; /* Make search and filter inputs full width */
-        box-sizing: border-box; /* Include padding and border in the width */
-        margin-bottom: 10px; /* Add some bottom margin for spacing */
-    }
-
-    .add-record,
-    .update-record,
-    .delete-record {
-        font-size: 16px; /* Increase button font size for better tap targets */
-        cursor: pointer;
-    }
-
-    .add-record-form,
-    .update-record-form,
-    .delete-record-form {
-        padding: 10px; /* Adjust padding for better spacing */
-        cursor: pointer;
-    }
-}
-
+        @media (max-width: 768px) {
+            .sidebar {
+                left: -250px;
+            }
+            
+            #check:checked ~ .sidebar {
+                left: 0;
+            }
+            
+            #check:checked ~ .main-content {
+                margin-left: 250px;
+            }
+            
+            #btn, #cancel {
+                display: block;
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+        }
     </style>
-	<link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-<input  type="checkbox" id="check">
-<label for="check">
-<i class="fas fa-bars" id="btn"></i>
-<i class="fas fa-times" id="cancel"></i>
-</label>
-<div class="sidebar">
-<header>ADMIN DASHBOARD</header>
-<ul>
-<li><a href="add_admin.php"><i class="fas fa-stream"></i>Admins</a></li>
-<li><a href="add_farmer.php"><i class="fas fa-stream"></i> Farmers</a></li>
-<li><a href="records.php"><i class="fas fa-sliders-h"></i>records</a></li>
-<li><a href="sendNotifications.php"><i class="fas fa-sliders-h"></i>Notifications</a></li>
-<li><a href="viewfeedbacks.php"><i class="fas fa-sliders-h"></i>feedback</a></li>
-<li><a href="reports.php"><i class="fas fa-question-circle"></i>reports</a></li>
-<li><a href="logout.php">Logout</a></li>
-</ul>
-</div>
-
-    <h2>Records Management</h2>
-
-  
-
-    <div class="table-container">
-	  <span class="add-record" onclick="openAddRecordForm()">+</span>
-
-        <div class="filter-bar">
-            <input type="text" class="filter-input" id="filterName" placeholder="Filter by ID..." oninput="filterTable()">
-            <input type="date" class="filter-input" id="filterDate" oninput="filterTable()">
-        </div>
-
-    <!-- Display records fetched from the database -->
-    <table id="recordsTable">
-    <tr>
-        <th>RecordID</th>
-        <th>FarmerID</th>
-        <th>Farmer Name</th>
-        <th>Cow Breed</th>
-        <th>Quantity</th>
-        <th>Rate</th>
-        <th>Income</th>
-        <th>Date/Time Taken</th>
-        <th>Action</th>
-    </tr>
-    <!-- Display records fetched from the database -->
-    <?php
-
-       
-        
-    if ($numRows > 0) {
-        $result->data_seek(0); // Reset result set pointer to the beginning
-        while ($row = $result->fetch_assoc()) {
-
-            $recordId = $row['record_Id'];
-            $farmerId = $row['farmer_Id'];
-            $farmerName = $row['farmer_name'];
-            $breedOfCow = $row['breedOfCow'];
-            $quantity = $row['quantity'];
-            $rate = $row['rate'];
-            $dateTime = $row['date_time'];
-
-            while ($row = $result->fetch_assoc()) {
-                $quantity = $row['quantity'];
-                $income = $quantity * $rate; // Calculate income based on quantity and dynamic rate
-                $totalIncome += $income; // Accumulate income for each row
-            }
-
-           
-            
-
-            echo "<tr>";
-            echo "<td>" . $recordId . "</td>";
-            echo "<td>" . $farmerId . "</td>";
-            echo "<td>" . $farmerName . "</td>";
-            echo "<td>" . $breedOfCow . "</td>";
-            echo "<td>" . $quantity . " kg</td>";
-            echo "<td>" . $rate . " </td>";
-            
-            echo "<td>" . $income . "</td>";
-            echo "<td class='action-buttons'>
-            <button onclick=\"openUpdateForm('$recordId', '$quantity', '$rate', '$dateTime')\" class='update-record-button'>Update</button>
-                 </td>";
-
-            echo "<td>" . $dateTime . "</td>";
-            echo "</tr>";
-        }
-
-        // Display total income row
-        echo "<tr>";
-        echo "<td colspan='6' style='text-align: right;'>Total Income:</td>";
-        echo "<td>" . $totalIncome . "</td>";
-        echo "<td></td>"; // Empty column for actions in total income row
-        echo "</tr>";
-    } else {
-        echo "<tr><td colspan='7'>No records found</td></tr>";
-    }
-    ?>
-    </table>
-
-
+    <input type="checkbox" id="check">
+    <label for="check">
+        <i class="fas fa-bars" id="btn"></i>
+        <i class="fas fa-times" id="cancel"></i>
+    </label>
+    
+    <div class="sidebar">
+        <div class="sidebar-header">ADMIN DASHBOARD</div>
+        <ul>
+            <li><a href="add_admin.php"><i class="fas fa-user-shield"></i> Admins</a></li>
+            <li><a href="add_farmer.php"><i class="fas fa-users"></i> Farmers</a></li>
+            <li><a href="records.php"><i class="fas fa-clipboard-list"></i> Records</a></li>
+            <li><a href="sendNotifications.php"><i class="fas fa-bell"></i> Notifications</a></li>
+            <li><a href="viewfeedbacks.php"><i class="fas fa-comment-alt"></i> Feedback</a></li>
+            <li><a href="reports.php"><i class="fas fa-chart-bar"></i> Reports</a></li>
+            <li><a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+        </ul>
     </div>
 
-    <!-- Blurred Background -->
-    <div class="blurred-background" id="blurredBackground"></div>
-
-    <!-- Add Record Form (Hidden by default) -->
-    <div class="add-record-form" id="addRecordForm">
-        <span class="close-icon" onclick="closeAddRecordForm()">✖</span>
-        <h3>Add a Record</h3>
-        <form method="post" action="records.php">
-            <label for="farmerId">Farmer ID:</label>
-            <input type="text" id="farmerId" name="farmerId" oninput="autocompleteFarmerName()" required><br><br>
-
-            <label for="farmerName">Farmer Name:</label>
-            <input type="text" id="farmerName" name="farmerName" readonly><br><br>
-			
-			<label for="breedOfCow">Breed of cow:</label>
-			 <input type="text" id="breedOfCow" name="breedOfCow" readonly oninput="autocompleteBreedOfCow()"><br><br>
-
-
-            <label for="quantity">Quantity:</label>
-            <input type="text" id="quantity" name="quantity" required><br><br>
-
-            <label for="rate">Rate:</label>
-            <input type="text" id="rate" name="rate" value="<?php echo $rate; ?>" required><br><br>
-			
-
-            <label for="dateTime">Date/Time Taken:</label>
-            <input type="datetime-local" id="dateTime" name="dateTime" required><br><br>
-
-            <input class="records-btns" type="submit" value="Add Record">
-        </form>
-    </div>
-	
-	 <!--Update form -->
-     <div class="update-record-form" id="updateRecordForm">
-        <span class="close-icon" onclick="closeUpdateForm()">✖</span>
-        <h3>Update Record</h3>
-        <form onsubmit="event.preventDefault(); submitUpdateForm();">
-            <input type="hidden" id="updateRecordId" name="updateRecordId">
-            <label for="updateQuantity">Quantity:</label>
-            <input type="text" id="updateQuantity" name="updateQuantity" required><br><br>
-
-            <label for="updateRate">Rate:</label>
-            <input type="text" id="updateRate" name="updateRate" required><br><br>
-
-            <label for="updateDateTime">Date/Time Taken:</label>
-            <input type="datetime-local" id="updateDateTime" name="updateDateTime" required><br><br>
-
-            <input class="records-btns" type="submit" value="Update Record">
-        </form>
-        <div id="updateMessage"></div> <!-- Display the update message here -->
-        </div>
-
-   <script>
-    let originalData = <?php echo json_encode($allRecords); ?>;
-    let filteredData = originalData.slice(); // Copy the original data for initial display
-
-    function filterTable() {
-        const filterName = document.getElementById('filterName').value.toLowerCase();
-        const filterDate = document.getElementById('filterDate').value;
-
-        filteredData = originalData.filter(row => {
-            const farmerId = row.farmer_Id.toLowerCase();
-            const dateTime = row.date_time.split(' ')[0].toLowerCase();
-
-            const idMatch = farmerId.includes(filterName);
-            const dateMatch = filterDate === '' || dateTime === filterDate;
-
-            return idMatch && dateMatch;
-        });
-
-        updateTable();
-        updateTotalIncome();
-    }
-
-	
-    function openUpdateForm(recordId, quantity, rate, dateTime) {
-        document.getElementById('updateRecordId').value = recordId;
-        document.getElementById('updateQuantity').value = quantity;
-        document.getElementById('updateRate').value = rate;
-        document.getElementById('updateDateTime').value = dateTime;
-        document.getElementById('updateMessage').innerHTML = ''; // Clear previous update message
-        document.getElementById('updateRecordForm').style.display = 'block';
-        const blurredBackground = document.getElementById('blurredBackground');
-        blurredBackground.style.display = 'block';
-    }
-
-    function closeUpdateForm() {
-        document.getElementById('updateRecordForm').style.display = 'none';
-        const blurredBackground = document.getElementById('blurredBackground');
-        blurredBackground.style.display = 'none';
-    }
-
-    function submitUpdateForm() {
-        var recordId = document.getElementById('updateRecordId').value;
-        var quantity = document.getElementById('updateQuantity').value;
-        var rate = document.getElementById('updateRate').value;
-        var dateTime = document.getElementById('updateDateTime').value;
-
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === XMLHttpRequest.DONE) {
-                if (xhr.status === 200) {
-                    console.log(xhr.responseText);
-                    // Display the update message
-                    document.getElementById('updateMessage').innerHTML = xhr.responseText;
-                    // Optionally, you can reload the page after a successful update
-                    setTimeout(function () {
-                    location.reload();
-                }, 2500);
-                } else {
-                    console.error('Error:', xhr.statusText);
-                    // Display the error message
-                    document.getElementById('updateMessage').innerHTML = 'Update action failed. Please check the console for details.';
-                }
-            }
-        };
-
-        var data = new FormData();
-        data.append('action', 'update');
-        data.append('updateRecordId', recordId);
-        data.append('updateQuantity', quantity);
-        data.append('updateRate', rate);
-        data.append('updateDateTime', dateTime);
-
-        xhr.open('POST', 'deleteUpdateRecords.php', true);
-        xhr.send(data);
-    }
-
-
-
-
-
-
-
-
-    function updateTable() {
-        const recordsTable = document.getElementById('recordsTable');
-        const totalIncomeElement = document.getElementById('totalIncome');
-        let totalIncome = 0;
-
-        // Clear the table
-        recordsTable.innerHTML = '';
-
-        // Display filtered records
-        if (filteredData.length > 0) {
-            let tableHTML = '<tr><th>RecordID</th><th>FarmerID</th><th>Farmer Name</th><th>Cow Breed</th><th>Quantity</th><th>Rate</th><th>Income</th><th>Date/Time Taken</th><th>Action</th></tr>';
-            for (let i = 0; i < filteredData.length; i++) {
-                const row = filteredData[i];
-                const recordId = row.record_Id;
-                const farmerId = row.farmer_Id;
-                const farmerName = row.farmer_name;
-                const cowBreed = row.breedOfCow;
-                const quantity = row.quantity;
-                const rate = row.rate;
-                const income = quantity * rate;
-                const dateTime = row.date_time;
+    <div class="main-content">
+        <div class="container">
+            <h2><i class="fas fa-clipboard-list"></i> Milk Collection Records</h2>
+            
+            <div class="card">
+                <form method="post" id="filterForm">
+                    <div class="filter-container">
+                        <input type="text" class="filter-input" id="filterName" name="filterName" placeholder="Filter by Farmer ID..." 
+                               value="<?php echo isset($_POST['filterName']) ? htmlspecialchars($_POST['filterName']) : ''; ?>">
+                        
+                        <div class="form-group" style="flex: 1; min-width: 200px;">
+                            <label for="startDate" class="form-label">From Date</label>
+                            <input type="date" class="filter-input" id="startDate" name="startDate" 
+                                   value="<?php echo $startDate; ?>">
+                        </div>
+                        
+                        <div class="form-group" style="flex: 1; min-width: 200px;">
+                            <label for="endDate" class="form-label">To Date</label>
+                            <input type="date" class="filter-input" id="endDate" name="endDate" 
+                                   value="<?php echo $endDate; ?>" max="<?php echo $currentDate; ?>">
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" style="align-self: flex-end;">
+                            <i class="fas fa-filter"></i> Apply Filters
+                        </button>
+                        
+                        <button type="button" class="btn btn-outline" style="align-self: flex-end;" 
+                                onclick="resetFilters()">
+                            <i class="fas fa-sync-alt"></i> Reset
+                        </button>
+                    </div>
+                </form>
                 
+                <div class="table-responsive">
+                    <table id="recordsTable">
+                        <thead>
+                            <tr>
+                                <th>Record ID</th>
+                                <th>Farmer ID</th>
+                                <th>Farmer Name</th>
+                                <th>Cow Breed</th>
+                                <th>Quantity (kg)</th>
+                                <th>Rate (Ksh)</th>
+                                <th>Income (Ksh)</th>
+                                <th>Date/Time</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php
+                            if ($numRows > 0) {
+                                $result->data_seek(0);
+                                while ($row = $result->fetch_assoc()) {
+                                    $recordId = $row['record_Id'];
+                                    $farmerId = $row['farmer_Id'];
+                                    $farmerName = $row['farmer_name'];
+                                    $breedOfCow = $row['breedOfCow'];
+                                    $quantity = $row['quantity'];
+                                    $rate = $row['rate'];
+                                    $income = $quantity * $rate;
+                                    $dateTime = $row['date_time'];
+                                    
+                                    echo "<tr>";
+                                    echo "<td>$recordId</td>";
+                                    echo "<td>$farmerId</td>";
+                                    echo "<td>$farmerName</td>";
+                                    echo "<td>$breedOfCow</td>";
+                                    echo "<td>$quantity</td>";
+                                    echo "<td>$rate</td>";
+                                    echo "<td>$income</td>";
+                                    echo "<td>$dateTime</td>";
+                                    echo "<td class='action-buttons'>";
+                                    echo "<button onclick=\"openUpdateForm('$recordId', '$quantity', '$rate', '$dateTime')\" class='btn btn-outline'><i class='fas fa-edit'></i> Edit</button>";
+                                    echo "</td>";
+                                    echo "</tr>";
+                                }
+                                
+                                echo "<tr class='total-row'>";
+                                echo "<td colspan='5' style='text-align: right;'><strong>Total Income:</strong></td>";
+                                echo "<td colspan='4'>Ksh $totalIncome</td>";
+                                echo "</tr>";
+                            } else {
+                                echo "<tr><td colspan='9' style='text-align: center;'>No records found</td></tr>";
+                            }
+                            ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                tableHTML += `<tr><td>${recordId}</td><td>${farmerId}</td><td>${farmerName}</td><td>${cowBreed}</td><td>${quantity} kg</td><td>${rate}</td><td>${income}</td><td>${dateTime}</td><td class='action-buttons'>
-                    <button onclick="openUpdateForm('${recordId}', '${quantity}', '${rate}', '${dateTime}')" class='update-record-button'>Update</button>
-                    </td></tr>`;
-                totalIncome += income;
+    <!-- Add Record Button -->
+    <div class="add-record-btn" onclick="openAddRecordForm()">
+        <i class="fas fa-plus"></i>
+    </div>
+
+    <!-- Add Record Modal -->
+    <div class="modal" id="addRecordModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeAddRecordForm()">&times;</span>
+            <h3><i class="fas fa-plus-circle"></i> Add New Record</h3>
+            <form method="post" action="records.php">
+                <div class="form-group">
+                    <label for="farmerId" class="form-label">Farmer ID</label>
+                    <input type="text" id="farmerId" name="farmerId" class="form-control" oninput="autocompleteFarmerName()" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="farmerName" class="form-label">Farmer Name</label>
+                    <input type="text" id="farmerName" name="farmerName" class="form-control" readonly>
+                </div>
+                
+                <div class="form-group">
+                    <label for="breedOfCow" class="form-label">Breed of Cow</label>
+                    <input type="text" id="breedOfCow" name="breedOfCow" class="form-control" readonly>
+                </div>
+                
+                <div class="form-group">
+                    <label for="quantity" class="form-label">Quantity (kg)</label>
+                    <input type="number" step="0.01" id="quantity" name="quantity" class="form-control" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="rate" class="form-label">Rate (Ksh)</label>
+                    <input type="number" step="0.01" id="rate" name="rate" class="form-control" value="<?php echo $rate; ?>" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="dateTime" class="form-label">Date/Time</label>
+                    <input type="datetime-local" id="dateTime" name="dateTime" class="form-control" 
+                           value="<?php echo $currentDateTime; ?>" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Record</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Update Record Modal -->
+    <div class="modal" id="updateRecordModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeUpdateForm()">&times;</span>
+            <h3><i class="fas fa-edit"></i> Update Record</h3>
+            <form onsubmit="event.preventDefault(); submitUpdateForm();">
+                <input type="hidden" id="updateRecordId" name="updateRecordId">
+                
+                <div class="form-group">
+                    <label for="updateQuantity" class="form-label">Quantity (kg)</label>
+                    <input type="number" step="0.01" id="updateQuantity" name="updateQuantity" class="form-control" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="updateRate" class="form-label">Rate (Ksh)</label>
+                    <input type="number" step="0.01" id="updateRate" name="updateRate" class="form-control" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="updateDateTime" class="form-label">Date/Time</label>
+                    <input type="datetime-local" id="updateDateTime" name="updateDateTime" class="form-control" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Record</button>
+            </form>
+            <div id="updateMessage" class="mt-3"></div>
+        </div>
+    </div>
+
+    <script>
+        let originalData = <?php echo json_encode($allRecords); ?>;
+        let filteredData = originalData.slice();
+
+        function filterTable() {
+            const filterName = document.getElementById('filterName').value.toLowerCase();
+            const filterDate = document.getElementById('filterDate').value;
+
+            filteredData = originalData.filter(row => {
+                const farmerId = row.farmer_Id.toLowerCase();
+                const dateTime = row.date_time.split(' ')[0].toLowerCase();
+
+                const idMatch = farmerId.includes(filterName);
+                const dateMatch = filterDate === '' || dateTime === filterDate;
+
+                return idMatch && dateMatch;
+            });
+
+            updateTable();
+        }
+
+        function updateTable() {
+            const recordsTable = document.querySelector('#recordsTable tbody');
+            let totalIncome = 0;
+
+            // Clear the table body
+            recordsTable.innerHTML = '';
+
+            // Display filtered records
+            if (filteredData.length > 0) {
+                filteredData.forEach(row => {
+                    const recordId = row.record_Id;
+                    const farmerId = row.farmer_Id;
+                    const farmerName = row.farmer_name;
+                    const cowBreed = row.breedOfCow;
+                    const quantity = row.quantity;
+                    const rate = row.rate;
+                    const income = quantity * rate;
+                    const dateTime = row.date_time;
+                    
+                    totalIncome += income;
+
+                    const rowElement = document.createElement('tr');
+                    rowElement.innerHTML = `
+                        <td>${recordId}</td>
+                        <td>${farmerId}</td>
+                        <td>${farmerName}</td>
+                        <td>${cowBreed}</td>
+                        <td>${quantity}</td>
+                        <td>${rate}</td>
+                        <td>${income}</td>
+                        <td>${dateTime}</td>
+                        <td class="action-buttons">
+                            <button onclick="openUpdateForm('${recordId}', '${quantity}', '${rate}', '${dateTime}')" class="btn btn-outline">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        </td>
+                    `;
+                    recordsTable.appendChild(rowElement);
+                });
+
+                // Add total row
+                const totalRow = document.createElement('tr');
+                totalRow.className = 'total-row';
+                totalRow.innerHTML = `
+                    <td colspan="5" style="text-align: right;"><strong>Total Income:</strong></td>
+                    <td colspan="4">Ksh ${totalIncome.toFixed(2)}</td>
+                `;
+                recordsTable.appendChild(totalRow);
+            } else {
+                const noRecordsRow = document.createElement('tr');
+                noRecordsRow.innerHTML = '<td colspan="9" style="text-align: center;">No records found</td>';
+                recordsTable.appendChild(noRecordsRow);
             }
-
-            // Display total income row
-            tableHTML += `<tr><td colspan='6' style='text-align: right;'>Total Income:</td><td>${totalIncome}</td><td></td></tr>`;
-            recordsTable.innerHTML = tableHTML;
-        } else {
-            recordsTable.innerHTML = "<tr><td colspan='7'>No records found</td></tr>";
         }
 
-        // Display total income for filtered data
-        if (totalIncomeElement) {
-            totalIncomeElement.textContent = totalIncome.toFixed(2);
+        function resetFilters() {
+            // Reset to current month (1st to today)
+            const firstDay = new Date();
+            firstDay.setDate(1);
+            const firstDayStr = firstDay.toISOString().split('T')[0];
+            
+            const today = new Date().toISOString().split('T')[0];
+            
+            document.getElementById('filterName').value = '';
+            document.getElementById('startDate').value = firstDayStr;
+            document.getElementById('endDate').value = today;
+            
+            // Submit the form to apply changes
+            document.getElementById('filterForm').submit();
         }
-    }
-
-    function updateTotalIncome() {
-        let totalIncome = 0;
-
-        // Calculate total income based on the filtered data
-        for (let i = 0; i < filteredData.length; i++) {
-            const row = filteredData[i];
-            const quantity = parseFloat(row.quantity);
-            totalIncome += quantity * $rate;
+        
+        function openAddRecordForm() {
+            document.getElementById('addRecordModal').style.display = 'flex';
         }
 
-        // Display total income for filtered data
-        const totalIncomeElement = document.getElementById('totalIncome');
-        if (totalIncomeElement) {
-            totalIncomeElement.textContent = totalIncome.toFixed(2);
+        function closeAddRecordForm() {
+            document.getElementById('addRecordModal').style.display = 'none';
         }
-    }
 
-    // Initial display of the table and total income
-    filterTable();
-
-    function openAddRecordForm() {
-        const addRecordForm = document.getElementById('addRecordForm');
-        addRecordForm.style.display = 'block';
-        const blurredBackground = document.getElementById('blurredBackground');
-        blurredBackground.style.display = 'block';
-    }
-
-    function closeAddRecordForm() {
-        const addRecordForm = document.getElementById('addRecordForm');
-        addRecordForm.style.display = 'none';
-        const blurredBackground = document.getElementById('blurredBackground');
-        blurredBackground.style.display = 'none';
-    }
-
-    function autocompleteFarmerName() {
-        const farmerIdInput = document.getElementById('farmerId');
-        const farmerNameInput = document.getElementById('farmerName');
-        const breedOfCowInput = document.getElementById('breedOfCow');
-
-        // Get the entered farmer ID
-        const farmerId = farmerIdInput.value.trim();
-
-        // Find the corresponding farmer in the data
-        const matchingFarmer = <?php echo json_encode($farmerData); ?>.find(farmer => farmer.id.includes(farmerId));
-
-        if (matchingFarmer) {
-            // Update the farmer name input field
-            farmerNameInput.value = matchingFarmer.name;
-
-            // Fetch the breed of cow information from the database using AJAX or another method
-            // In this example, I'm assuming that the breed information is available in the farmer object
-            const breedOfCow = matchingFarmer.breedOfCow;
-
-            // Update the breed of cow input field
-            breedOfCowInput.value = breedOfCow;
-        } else {
-            // Clear the inputs if no matching farmer is found
-            farmerNameInput.value = '';
-            breedOfCowInput.value = '';
+        function openUpdateForm(recordId, quantity, rate, dateTime) {
+            document.getElementById('updateRecordId').value = recordId;
+            document.getElementById('updateQuantity').value = quantity;
+            document.getElementById('updateRate').value = rate;
+            document.getElementById('updateDateTime').value = dateTime;
+            document.getElementById('updateMessage').innerHTML = '';
+            document.getElementById('updateRecordModal').style.display = 'flex';
         }
-    }
-</script>
 
+        function closeUpdateForm() {
+            document.getElementById('updateRecordModal').style.display = 'none';
+        }
+
+        function submitUpdateForm() {
+            const recordId = document.getElementById('updateRecordId').value;
+            const quantity = document.getElementById('updateQuantity').value;
+            const rate = document.getElementById('updateRate').value;
+            const dateTime = document.getElementById('updateDateTime').value;
+
+            const xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === XMLHttpRequest.DONE) {
+                    if (xhr.status === 200) {
+                        document.getElementById('updateMessage').innerHTML = `
+                            <div class="success-message">
+                                <i class="fas fa-check-circle"></i> ${xhr.responseText}
+                            </div>
+                        `;
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1500);
+                    } else {
+                        document.getElementById('updateMessage').innerHTML = `
+                            <div class="error-message">
+                                <i class="fas fa-exclamation-circle"></i> Error updating record. Please try again.
+                            </div>
+                        `;
+                    }
+                }
+            };
+
+            const data = new FormData();
+            data.append('action', 'update');
+            data.append('updateRecordId', recordId);
+            data.append('updateQuantity', quantity);
+            data.append('updateRate', rate);
+            data.append('updateDateTime', dateTime);
+
+            xhr.open('POST', 'deleteUpdateRecords.php', true);
+            xhr.send(data);
+        }
+
+        function autocompleteFarmerName() {
+            const farmerIdInput = document.getElementById('farmerId');
+            const farmerNameInput = document.getElementById('farmerName');
+            const breedOfCowInput = document.getElementById('breedOfCow');
+
+            const farmerId = farmerIdInput.value.trim();
+            const matchingFarmer = <?php echo json_encode($farmerData); ?>.find(farmer => farmer.id.includes(farmerId));
+
+            if (matchingFarmer) {
+                farmerNameInput.value = matchingFarmer.name;
+                breedOfCowInput.value = matchingFarmer.breedOfCow;
+            } else {
+                farmerNameInput.value = '';
+                breedOfCowInput.value = '';
+            }
+        }
+
+        // Set max date for end date picker to today
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('endDate').max = today;
+            
+            // Initialize the table
+            filterTable();
+        });
+    </script>
 </body>
-
 </html>
