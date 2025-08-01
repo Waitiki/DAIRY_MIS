@@ -196,7 +196,7 @@ function saveFeedback($conn, $farmerId, $farmerName, $feedbackMessage) {
     </section>
 
     <footer>
-        &copy; 2023 Farmer Dashboard
+        &copy; 2025 Farmer Dashboard
     </footer>
 </body>
 </html>

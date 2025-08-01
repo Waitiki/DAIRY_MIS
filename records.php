@@ -284,6 +284,160 @@ $currentDateTime = date('Y-m-d\TH:i');
             flex-wrap: wrap;
         }
 
+        /* Enhanced Filter Styles */
+        .filter-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(76, 175, 80, 0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .filter-header {
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .filter-header h3 {
+            color: var(--primary-color);
+            margin: 0 0 8px 0;
+            font-size: 1.4rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .filter-subtitle {
+            color: #6c757d;
+            margin: 0;
+            font-size: 0.95rem;
+            font-style: italic;
+        }
+
+        .enhanced-filter-form {
+            width: 100%;
+        }
+
+        .filter-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .filter-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px !important;
+            align-items: end;
+        }
+
+        .filter-item {
+            margin: 0;
+        }
+
+        .filter-item .form-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: #495057;
+            margin-bottom: 8px;
+        }
+
+        .filter-item .form-label i {
+            color: var(--primary-color);
+            font-size: 0.85rem;
+        }
+
+        .filter-item .form-control {
+            background-color: var(--white);
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 12px;
+            width: 80%;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .filter-item .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .filter-item .form-control:hover {
+            border-color: #ced4da;
+        }
+
+        .filter-actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            padding-top: 10px;
+            border-top: 1px solid #e9ecef;
+            margin-top: 10px;
+        }
+
+        .filter-btn {
+            padding: 12px 24px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 140px;
+            justify-content: center;
+        }
+
+        .filter-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: var(--white);
+            border: 1px solid #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268;
+            border-color: #5a6268;
+        }
+
+        /* Responsive adjustments for enhanced filter */
+        @media (max-width: 768px) {
+            .filter-section {
+                padding: 20px 15px;
+            }
+
+            .filter-row {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .filter-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-btn {
+                width: 100%;
+                min-width: auto;
+            }
+
+            .filter-header h3 {
+                font-size: 1.2rem;
+            }
+        }
+
         .form-group {
             flex: 1;
             min-width: 200px;
@@ -564,33 +718,52 @@ $currentDateTime = date('Y-m-d\TH:i');
             <?php endif; ?>
             
             <div class="card">
-                <form method="post" id="filterForm">
-                    <div class="filter-container">
-                        <div class="form-group">
-                            <label for="filterName" class="form-label">Filter by Farmer ID</label>
-                            <input type="text" class="form-control" id="filterName" name="filterName" placeholder="Enter Farmer ID..." 
-                                   value="<?php echo isset($_POST['filterName']) ? htmlspecialchars($_POST['filterName']) : ''; ?>">
-                        </div>
-                        <div class="form-group">
-                            <label for="startDate" class="form-label">From Date</label>
-                            <input type="date" class="form-control" id="startDate" name="startDate" 
-                                   value="<?php echo htmlspecialchars($startDate); ?>">
-                        </div>
-                        <div class="form-group">
-                            <label for="endDate" class="form-label">To Date</label>
-                            <input type="date" class="form-control" id="endDate" name="endDate" 
-                                   value="<?php echo htmlspecialchars($endDate); ?>" max="<?php echo htmlspecialchars($currentDate); ?>">
-                        </div>
-                        <div class="form-group" style="align-self: flex-end;">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-filter"></i> Apply Filters
-                            </button>
-                            <button type="button" class="btn btn-outline" onclick="resetFilters()">
-                                <i class="fas fa-sync-alt"></i> Reset
-                            </button>
-                        </div>
+                <div class="filter-section">
+                    <div class="filter-header">
+                        <h3><i class="fas fa-filter"></i> Filter Records</h3>
+                        <p class="filter-subtitle">Use the filters below to search and filter milk collection records</p>
                     </div>
-                </form>
+                    <form method="post" id="filterForm" class="enhanced-filter-form">
+                        <div class="filter-grid">
+                            <div class="filter-row">
+                                <div class="form-group filter-item">
+                                    <label for="filterName" class="form-label">
+                                        <i class="fas fa-user"></i> Farmer ID
+                                    </label>
+                                    <input type="text" class="form-control" id="filterName" name="filterName" 
+                                           placeholder="Enter Farmer ID to search..." 
+                                           value="<?php echo isset($_POST['filterName']) ? htmlspecialchars($_POST['filterName']) : ''; ?>">
+                                </div>
+                                <div class="form-group filter-item">
+                                    <label for="startDate" class="form-label">
+                                        <i class="fas fa-calendar-alt"></i> From Date
+                                    </label>
+                                    <input type="date" class="form-control" id="startDate" name="startDate" 
+                                           value="<?php echo htmlspecialchars($startDate); ?>">
+                                </div>
+                                <div class="form-group filter-item">
+                                    <label for="endDate" class="form-label">
+                                        <i class="fas fa-calendar-alt"></i> To Date
+                                    </label>
+                                    <input type="date" class="form-control" id="endDate" name="endDate" 
+                                           value="<?php echo htmlspecialchars($endDate); ?>" 
+                                           max="<?php echo htmlspecialchars($currentDate); ?>">
+                                </div>
+                            </div>
+                            <div class="filter-actions">
+                                <button type="submit" class="btn btn-primary filter-btn">
+                                    <i class="fas fa-search"></i> Apply Filters
+                                </button>
+                                <button type="button" class="btn btn-outline filter-btn" onclick="resetFilters()">
+                                    <i class="fas fa-undo"></i> Reset Filters
+                                </button>
+                                <button type="button" class="btn btn-secondary filter-btn" onclick="exportFilteredData()">
+                                    <i class="fas fa-download"></i> Export Data
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
                 
                 <div class="table-responsive">
                     <table id="recordsTable">
@@ -861,6 +1034,35 @@ $currentDateTime = date('Y-m-d\TH:i');
                 farmerNameInput.value = '';
                 breedOfCowInput.value = '';
             }
+        }
+
+        function exportFilteredData() {
+            const filterName = document.getElementById('filterName').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            // Create a form to submit the export request
+            const exportForm = document.createElement('form');
+            exportForm.method = 'POST';
+            exportForm.action = 'export_records.php';
+            
+            // Add filter parameters
+            const addField = (name, value) => {
+                const field = document.createElement('input');
+                field.type = 'hidden';
+                field.name = name;
+                field.value = value;
+                exportForm.appendChild(field);
+            };
+            
+            addField('filterName', filterName);
+            addField('startDate', startDate);
+            addField('endDate', endDate);
+            addField('export', 'csv');
+            
+            document.body.appendChild(exportForm);
+            exportForm.submit();
+            document.body.removeChild(exportForm);
         }
 
         document.addEventListener('DOMContentLoaded', function() {

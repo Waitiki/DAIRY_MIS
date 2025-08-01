@@ -272,7 +272,7 @@ S
     </script>
 
     <footer>
-        &copy; 2023 Farmer Dashboard
+        &copy; 2025 Farmer Dashboard
     </footer>
 
     <!-- Include your existing scripts here -->

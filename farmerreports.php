@@ -140,7 +140,7 @@ $conn->close();
     </section>
 
     <footer>
-        &copy; 2023 Farmer Dashboard
+        &copy; 2025 Farmer Dashboard
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

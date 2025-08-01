@@ -243,7 +243,7 @@ $conn->close();
     </section>
 
     <footer>
-        &copy; 2023 Farmer Dashboard
+        &copy; 2025 Farmer Dashboard
     </footer>
 
     <!-- Your existing scripts go here -->
