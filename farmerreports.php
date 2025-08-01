@@ -80,6 +80,13 @@ $conn->close();
             margin: 0 10px;
         }
 
+        nav a.active {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            /* border-radius: 4px; */
+            border-top: 4px solid #3498db;
+        }
+
         section {
             padding: 20px;
             display: flex;
@@ -111,8 +118,9 @@ $conn->close();
     </header>
 
     <nav>
+        <a href="farmerreports.php">Refresh</a>
         <a href="farmerdb.php">Dashboard</a>
-        <a href="farmerreports.php">Reports</a>
+        <a class="active" href="farmerreports.php">Reports</a>
         <a href="profile.php">Profile</a>
         <a href="feedback.php">Feedback</a>
         <a href="settings.php">Settings</a>

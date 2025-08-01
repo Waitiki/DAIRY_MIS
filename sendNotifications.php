@@ -324,6 +324,20 @@ $notificationsResult = $conn->query($notificationsQuery);
             margin-right: 10px;
         }
 
+        .sidebar ul li.active {
+            background-color: var(--primary-color);
+            border-left: 4px solid var(--white);
+        }
+
+        .sidebar ul li.active a {
+            color: var(--white);
+            font-weight: 600;
+        }
+
+        .sidebar ul li.active:hover {
+            background-color: var(--primary-dark);
+        }
+
         .main-content {
             margin-left: 250px;
             transition: all 0.3s;
@@ -392,12 +406,13 @@ $notificationsResult = $conn->query($notificationsQuery);
     </label>
     
     <div class="sidebar">
-        <div class="sidebar-header">ADMIN DASHBOARD</div>
+        <div class="sidebar-header">ADMIN PANEL</div>
         <ul>
+            <li><a href="admindb.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
             <li><a href="add_admin.php"><i class="fas fa-user-shield"></i> Admins</a></li>
             <li><a href="add_farmer.php"><i class="fas fa-users"></i> Farmers</a></li>
             <li><a href="records.php"><i class="fas fa-clipboard-list"></i> Records</a></li>
-            <li><a href="sendNotifications.php"><i class="fas fa-bell"></i> Notifications</a></li>
+            <li class="active"><a href="sendNotifications.php"><i class="fas fa-bell"></i> Notifications</a></li>
             <li><a href="viewfeedbacks.php"><i class="fas fa-comment-alt"></i> Feedback</a></li>
             <li><a href="reports.php"><i class="fas fa-chart-bar"></i> Reports</a></li>
             <li><a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
